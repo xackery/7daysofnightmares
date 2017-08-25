@@ -176,28 +176,32 @@ namespace CoreApi
                     //AI LOGIC/CLEANUP
                     for (int i = NightmareInstances.Count - 1; i > 0; i--)
                     {
+                        int index = i - 1;
+                        NightmareInstance ni = NightmareInstances[index];
+
                         //Remove dead/null instances
-                        if (NightmareInstances[i].Instance == null || NightmareInstances[i].Instance.IsDead())
+                        if (ni == null || ni.Instance == null || ni.Instance.IsDead())
                         {
-                            NightmareInstances.RemoveAt(i);
-                            API.Log("Removed nightmare instance " + i + ", " + NightmareInstances.Count + " left");
+                            NightmareInstances.RemoveAt(index);
+                            API.Log("Removed nightmare instance " + index + ", " + NightmareInstances.Count + " left");
                             continue;
                         }
 
                         //Ensure we got a target.
-                        if (NightmareInstances[i].TargetEntity == null || NightmareInstances[i].TargetEntity.IsDead())
+                        if (ni.TargetEntity == null || ni.TargetEntity.IsDead())
                         {
-                            API.Log(i + " is picking a new random player target");
-                            NightmareInstances[i].PickRandomTarget();
+                            API.Log(index + " is picking a new random player target");
+                            ni.PickRandomTarget();
                         }
                     }
 
-                    if (NextNightmare <= GameManager.Instance.World.GetWorldTime() && NightmareSeeds.Count > 0)
+                    if (NightmareSeeds.Count > 0 && NextNightmare <= GameManager.Instance.World.GetWorldTime())
                     {
                         foreach (NightmareType nt in NightmareSeeds[0].NightmareTypes) SpawnNightmare(nt);
                         
                         NightmareSeeds.RemoveAt(0);
-                        NextNightmare = NightmareSeeds[0].SeedTime;
+                        NextNightmare = 0;
+                        if (NightmareSeeds.Count > 0) NextNightmare = NightmareSeeds[0].SeedTime;                        
                     }
                 } catch (Exception e)
                 {
