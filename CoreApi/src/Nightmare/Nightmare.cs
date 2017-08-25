@@ -3,89 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
-//animalBear
-//animalBoar
-//animalChicken
-//animalDireWolf
-//animalRabbit
-//animalSnake
-//animalStag
-//animalWolf
-//animalZombieBear
-//animalZombieDog
-//animalZombieVulture
-//Backpack
-//DroppedLootContainer
-//EvisceratedRemains
-//fallingBlock
-//fallingTree
-//invisibleAnimal
-//item
-//minibike
-//npcTraderBob
-//npcTraderHugh
-//npcTraderJimmy
-//npcTraderJoel
-//npcTraderRekt
-//playerFemale
-//playerMale
-//sc_General
-//zombieArlene
-//zombieArleneFeral
-//zombieBiker
-//zombieBoe
-//zombieBoeFeral
-//zombieBurnt
-//zombieBusinessMan
-//zombieBusinessManFeral
-//zombieCheerleader
-//zombieCheerleaderFeral
-//zombieDarlene
-//zombieDarleneFeral
-//zombieFarmer
-//zombieFarmerFeral
-//zombieFatCop
-//zombieFatCopFeral
-//zombieFatCopFeralRadiated
-//zombieFatHawaiian
-//zombieFatHawaiianFeral
-//zombieFemaleFat
-//zombieFemaleFatFeral
-//zombieFootballPlayer
-//zombieJoe
-//zombieJoeFeral
-//zombieMaleHazmat
-//zombieMarlene
-//zombieMarleneFeral
-//zombieMoe
-//zombieMoeFeral
-//zombieNurse
-//zombieNurseFeral
-//zombieOldTimer
-//zombieOldTimerFeral
-//zombieScreamer
-//zombieScreamerFeral
-//zombieSkateboarder
-//zombieSkateboarderFeral
-//zombieSnow
-//zombieSnowFeral
-//zombieSoldier
-//zombieSoldierFeral
-//zombieSpider
-//zombieSpiderFeral
-//zombieSpiderFeralRadiated
-//zombieSteve
-//zombieSteveCrawler
-//zombieSteveCrawlerFeral
-//zombieSteveFeral
-//zombieStripper
-//zombieStripperFeral
-//zombieUtilityWorker
-//zombieUtilityWorkerFeral
-//zombieWightFeral
-//zombieWightFeralRadiated
-//zombieYo
-//zombieYoFeral
+
 namespace CoreApi
 {
 
@@ -109,12 +27,16 @@ namespace CoreApi
     //This is a holder for nightmare types with scheduled time information
     class NightmareSeed
     {
-        public NightmareType NightmareType;
+        public List<NightmareType> NightmareTypes = new List<NightmareType>();
         public ulong SeedTime;
         public NightmareSeed(NightmareType nt, ulong seedTime)
         {
-            NightmareType = nt;
+            NightmareTypes.Add(nt);
             SeedTime = seedTime;
+        }
+        public void AddType(NightmareType nt)
+        {
+            NightmareTypes.Add(nt);
         }
     }
 
@@ -166,26 +88,64 @@ namespace CoreApi
             NightmareType n;
             n = new NightmareType("A nightmare manifests itself", "zombieSpider", 0, 10);
             NightmareTypes.Add(n);
-            n = new NightmareType("A nightmare manifests itself", "animalZombieDog", 0, 60);
+            n = new NightmareType("A nightmare manifests itself", "animalZombieDog", 0, 100);
             NightmareTypes.Add(n);
-            n = new NightmareType("A nightmare manifests itself", "animalWolf", 0, 30);
+            n = new NightmareType("A nightmare manifests itself", "animalWolf", 0, 80);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "animalBear", 0, 20);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieFatCop", 0, 10);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieArlene", 0, 20);
+            NightmareTypes.Add(n);
+
+            n = new NightmareType("A nightmare manifests itself", "animalBear", 1, 50);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieSoldier", 1, 20);
             NightmareTypes.Add(n);
             n = new NightmareType("A nightmare manifests itself", "zombieSoldier", 1, 20);
             NightmareTypes.Add(n);
             n = new NightmareType("A nightmare manifests itself", "zombieSkateboarderFeral", 1, 20);
             NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieCheerleaderFeral", 1, 20);
+            NightmareTypes.Add(n);
+            
+
             n = new NightmareType("A nightmare manifests itself", "zombieOldTimer", 2, 20);
             NightmareTypes.Add(n);
             n = new NightmareType("A nightmare manifests itself", "zombieArleneFeral", 2, 20);
             NightmareTypes.Add(n);
+            //n = new NightmareType("A nightmare manifests itself", "animalZombieVulture", 2, 20);
+            //NightmareTypes.Add(n);
+
             n = new NightmareType("A nightmare manifests itself", "zombieSoldierFeral", 3, 20);
             NightmareTypes.Add(n);
-            n = new NightmareType("A nightmare manifests itself", "zombieScreamer", 4, 20);
+            n = new NightmareType("A nightmare manifests itself", "zombieFatHawaiianFeral", 3, 20);
             NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieSnowFeral", 3, 20);
+            NightmareTypes.Add(n);
+
+            n = new NightmareType("A nightmare manifests itself", "zombieScreamer", 4, 100);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieSpiderFeral", 4, 100);
+            NightmareTypes.Add(n);
+
             n = new NightmareType("A nightmare manifests itself", "animalZombieBear", 5, 20);
-            NightmareTypes.Add(n);            
-            n = new NightmareType("A nightmare manifests itself", "zombieScreamerFeral", 6, 20);
             NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieStripperFeral", 5, 20);
+            NightmareTypes.Add(n);
+            
+            n = new NightmareType("A nightmare manifests itself", "zombieScreamerFeral", 6, 150);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieFatCopFeral", 6, 150);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieFatCopFeralRadiated", 6, 100);
+            NightmareTypes.Add(n);
+
+
+            n = new NightmareType("A nightmare manifests itself", "zombieFatCopFeralRadiated", 7, 350);
+            NightmareTypes.Add(n);
+
 
             API.Log("*** Initialized Nightmare Mod, Added " + NightmareTypes.Count + " nightmare types ***");
 
@@ -234,7 +194,8 @@ namespace CoreApi
 
                     if (NextNightmare <= GameManager.Instance.World.GetWorldTime() && NightmareSeeds.Count > 0)
                     {
-                        SpawnNightmare(NightmareSeeds[0]);
+                        foreach (NightmareType nt in NightmareSeeds[0].NightmareTypes) SpawnNightmare(nt);
+                        
                         NightmareSeeds.RemoveAt(0);
                         NextNightmare = NightmareSeeds[0].SeedTime;
                     }
@@ -255,10 +216,16 @@ namespace CoreApi
                 API.Log("Seeding nightmares with current time: " + currentTime);
 
                 Random rnd = new Random();
+                int playerCount = GameManager.Instance.World.Players.Count;
+                if (playerCount < 2) playerCount = 2;
 
+                int maxNumberofNightmares = playerCount + GameUtils.WorldTimeToDays(GameManager.Instance.World.GetWorldTime());
+                if (maxNumberofNightmares < 2) maxNumberofNightmares = 2;
 
-                int maxNumberofNightmares = GameManager.Instance.World.Players.Count + GameUtils.WorldTimeToDays(GameManager.Instance.World.GetWorldTime());
                 int numberOfNightmares = rnd.Next(1, maxNumberofNightmares);
+
+                int batchNumberofNightmares = playerCount + (GameUtils.WorldTimeToDays(GameManager.Instance.World.GetWorldTime()) / 2);
+                if (batchNumberofNightmares < 2) batchNumberofNightmares = 2;
 
                 API.Log("Preparing " + numberOfNightmares + " total nightmares for the next 24 hours");
                 
@@ -269,11 +236,22 @@ namespace CoreApi
 
                 for (int i = 0; i < numberOfNightmares; i++)
                 {
+                    string nightmareGroup = "";
                     NightmareType nt = GetRandomNightmareType();
                     //1440 minutes in a day.
                     NightmareSeed ns = new NightmareSeed(nt, lastTime + (ulong)rnd.Next(1, timeGap));
+                    nightmareGroup += nt.ClassName;
+
+                    //add additional nightmares based on batch
+                    int batchCount = rnd.Next(1, batchNumberofNightmares);
+                    for (int j = 1; j < batchCount; j++) {
+                        nt = GetRandomNightmareType();
+                        ns.AddType(nt);
+                        nightmareGroup += ", "+nt.ClassName;
+                    }
+
                     lastTime = ns.SeedTime;
-                    API.Log(NightmareSeeds.Count + " is a " + ns.NightmareType.ClassName + " and will spawn at " + ns.SeedTime);
+                    API.Log(NightmareSeeds.Count + " contains: " + nightmareGroup+ " and will spawn at " + ns.SeedTime);
                     if (i == 0) NextNightmare = ns.SeedTime;
                     NightmareSeeds.Add(ns);
                 }
@@ -349,12 +327,12 @@ namespace CoreApi
         
 
         //Spawns a nightmare
-        public static void SpawnNightmare(NightmareSeed ns)
+        public static void SpawnNightmare(NightmareType nt)
         {
 
             NightmareInstance ni = new NightmareInstance();
 
-            ni.InstanceType = ns.NightmareType;
+            ni.InstanceType = nt;
 
             try
             {
@@ -412,7 +390,8 @@ namespace CoreApi
                         API.Log("Setting entity name");
                         ni.Instance.SetEntityName("A nightmare");
                         //ni.Instance.MovementRunning = true;
-
+                        
+                        //ni.Instance.lootContainer.AddItem()
                         GameManager.Instance.World.SpawnEntityInWorld(ni.Instance);
                         API.Log("Broadcasting spawn alert");
                         BroadcastMessage(ni.InstanceType.Message);
