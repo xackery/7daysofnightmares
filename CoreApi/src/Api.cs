@@ -41,16 +41,27 @@ namespace CoreApi
         //When a player disconnects
         public override void PlayerDisconnected(ClientInfo _cInfo, bool _bShutdown)
         {
-            if (Nightmare.AreNightmaresHappening)
-            {
-                //Todo: Figure out a way to punish or switch targets on D/c ?
-            }
         }
 
         //When game shuts down
         public override void GameShutdown()
         {
             Nightmare.Unload();
+        }
+
+        public static void Log(string message)
+        {
+            //UnityEngine.Debug.API.Log("NightmareMod: " + message);
+            //BroadcastMessage(message);
+            UnityEngine.Debug.Log(UnityEngine.Application.dataPath);
+            if (!Directory.Exists(UnityEngine.Application.dataPath+"/Logs")) Directory.CreateDirectory(UnityEngine.Application.dataPath+"/Logs");
+            
+            using (StreamWriter sw = new StreamWriter(UnityEngine.Application.dataPath+"/Logs/nightmare.txt", true))
+            {
+                sw.WriteLine(string.Format("{0} {1}", System.DateTime.Now, message));
+                sw.Flush();
+                sw.Close();
+            }
         }
     }
 }

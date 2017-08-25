@@ -88,12 +88,34 @@ using System.Threading;
 //zombieYoFeral
 namespace CoreApi
 {
+
+    //This is a lookup table of possible nightmares with weights
     class NightmareType
     {
         public string Message;
         public string ClassName;
         public int MinimumDay;
         public int Weight;        
+
+        public NightmareType(string message, string className, int minimumDay, int weight)
+        {
+            Message = message;
+            ClassName = className;
+            MinimumDay = minimumDay;
+            Weight = weight;
+        }
+    }
+
+    //This is a holder for nightmare types with scheduled time information
+    class NightmareSeed
+    {
+        public NightmareType NightmareType;
+        public ulong SeedTime;
+        public NightmareSeed(NightmareType nt, ulong seedTime)
+        {
+            NightmareType = nt;
+            SeedTime = seedTime;
+        }
     }
 
     class NightmareInstance
@@ -102,17 +124,19 @@ namespace CoreApi
         public NightmareType InstanceType;
 
         public EntityAlive TargetEntity;
-        public ClientInfo TargetClient;
-
+                
         public void PickRandomTarget()
         {
+            API.Log("Picking target...");
             Random rnd = new Random();
-            List<ClientInfo> _cInfoList = ConnectionManager.Instance.GetClients();
-            TargetClient = _cInfoList[rnd.Next(0, _cInfoList.Count())];
-            TargetEntity = (EntityAlive)GameManager.Instance.World.GetEntity(TargetClient.entityId);
-            Nightmare.Log("Targetting " + TargetClient.playerName);
+            List<EntityPlayer> players = GameManager.Instance.World.GetPlayers();
+            int roll = rnd.Next(0, players.Count);
+            API.Log("Rolled: " + roll + " Size of players: " + players.Count);
+            TargetEntity = (EntityAlive)players[roll];
+            
+            API.Log("Targetting " + TargetEntity.belongsPlayerId);
+
             //Instance.SetInvestigatePosition(TargetEntity.position, 2400);
-            Instance.SetAttackTarget(TargetEntity, 2400);
         }
     }
 
@@ -122,21 +146,14 @@ namespace CoreApi
         public static bool IsRunning = false;
         private static Thread th;
 
-        //Has a new hour happened?
-        public static int LastHourCheck = 0;
-        //Has a nightmare happened this hour yet?
-        public static bool HasANightmareHappenedThisHour;
-        //Track how many nightmares have happened in the day so far.
-        public static int NightmareDayCounter = 0;
-        public static bool AreNightmaresHappening
-        {
-            get {
-                return (NightmareInstances.Count() > 0);
-            }
-            set { }
-        }
+        //next time a nightmare will happen
+        private static ulong NextNightmare;
+        //Next time to reseed nightmares
+        private static ulong NextNightmareReseed;
+        
         private static List<NightmareInstance> NightmareInstances = new List<NightmareInstance>();
         private static List<NightmareType> NightmareTypes = new List<NightmareType>();
+        private static List<NightmareSeed> NightmareSeeds = new List<NightmareSeed>();
 
         public static void Load()
         {
@@ -146,44 +163,31 @@ namespace CoreApi
         
         private static void Start()
         {
-            NightmareType n = new NightmareType();
-            n.Message = "A nightmare manifests itself";
-            n.MinimumDay = 0;
-            n.Weight = 10;
-            n.ClassName = "zombieSpiderFeral";
+            NightmareType n;
+            n = new NightmareType("A nightmare manifests itself", "zombieSpider", 0, 10);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "animalZombieDog", 0, 60);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "animalWolf", 0, 30);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieSoldier", 1, 20);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieSkateboarderFeral", 1, 20);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieOldTimer", 2, 20);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieArleneFeral", 2, 20);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieSoldierFeral", 3, 20);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "zombieScreamer", 4, 20);
+            NightmareTypes.Add(n);
+            n = new NightmareType("A nightmare manifests itself", "animalZombieBear", 5, 20);
+            NightmareTypes.Add(n);            
+            n = new NightmareType("A nightmare manifests itself", "zombieScreamerFeral", 6, 20);
             NightmareTypes.Add(n);
 
-            n = new NightmareType();
-            n.Message = "A nightmare manifests itself";
-            n.Weight = 50;
-            n.MinimumDay = 0;
-            n.ClassName = "animalZombieDog";
-            NightmareTypes.Add(n);
-
-            n = new NightmareType();
-            n.Message = "A nightmare manifests itself";
-            n.Weight = 10;
-            n.MinimumDay = 0;
-            n.ClassName = "animalWolf";
-            NightmareTypes.Add(n);
-
-
-            n = new NightmareType();
-            n.Message = "A nightmare manifests itself";
-            n.Weight = 10;
-            n.MinimumDay = 2;
-            n.ClassName = "zombieSkateboarderFeral";
-            NightmareTypes.Add(n);
-
-
-            n = new NightmareType();
-            n.Message = "A nightmare manifests itself";
-            n.Weight = 10;
-            n.MinimumDay = 2;
-            n.ClassName = "zombieArleneFeral";
-            NightmareTypes.Add(n);
-            
-            Log("Nightmare: Added " + NightmareTypes.Count + " nightmares.");
+            API.Log("*** Initialized Nightmare Mod, Added " + NightmareTypes.Count + " nightmare types ***");
 
             th = new Thread(new ThreadStart(StatusCheck));
             th.IsBackground = true;
@@ -200,172 +204,235 @@ namespace CoreApi
         {
             while (true)
             {
-                Thread.Sleep(6000);
-                Log("Tick" + NightmareDayCounter);
-                //if (!IsRunning) return;
-
-                if (ConnectionManager.Instance.ClientCount() < 1) continue;
-
-                //AI LOGIC/CLEANUP
-                for (int i = NightmareInstances.Count - 1; i > 0; i--)
+                try
                 {
-                    //Remove dead/null instances
-                    if (NightmareInstances[i].Instance == null || NightmareInstances[i].Instance.IsDead())
-                    {                        
-                        NightmareInstances.RemoveAt(i);
-                        Log("Removed nightmare instance " + i + ", " + NightmareInstances.Count + " left");
-                        continue;
-                    }
+                    Thread.Sleep(6000);
+                    if (NextNightmareReseed <= GameManager.Instance.World.GetWorldTime()) SeedNightmares();
+                    API.Log("Time: " + GameManager.Instance.World.GetWorldTime()+", nextSeed: "+NextNightmareReseed+", nextEvent: "+NextNightmare);
+                    
 
-                    //Ensure we got a target.
-                    if (NightmareInstances[i].TargetEntity == null || NightmareInstances[i].TargetEntity.IsDead())
+                    if (ConnectionManager.Instance.ClientCount() < 1 || GameManager.Instance.World.GetPlayers().Count < 1) continue;
+
+                    //AI LOGIC/CLEANUP
+                    for (int i = NightmareInstances.Count - 1; i > 0; i--)
                     {
-                        Log(i + " is picking a new random player target");
-                        NightmareInstances[i].PickRandomTarget();
+                        //Remove dead/null instances
+                        if (NightmareInstances[i].Instance == null || NightmareInstances[i].Instance.IsDead())
+                        {
+                            NightmareInstances.RemoveAt(i);
+                            API.Log("Removed nightmare instance " + i + ", " + NightmareInstances.Count + " left");
+                            continue;
+                        }
+
+                        //Ensure we got a target.
+                        if (NightmareInstances[i].TargetEntity == null || NightmareInstances[i].TargetEntity.IsDead())
+                        {
+                            API.Log(i + " is picking a new random player target");
+                            NightmareInstances[i].PickRandomTarget();
+                        }
                     }
-                }
 
-                if (!HasANightmareHappenedThisHour) TrySpawningNightmare();
-
-                // HOURLY CHECK DICE
-                if (LastHourCheck == CurrentHour()) continue;
-
-                Log("Hour changed from " + LastHourCheck + " to " + CurrentHour());
-                if (LastHourCheck > CurrentHour())
+                    if (NextNightmare <= GameManager.Instance.World.GetWorldTime() && NightmareSeeds.Count > 0)
+                    {
+                        SpawnNightmare(NightmareSeeds[0]);
+                        NightmareSeeds.RemoveAt(0);
+                        NextNightmare = NightmareSeeds[0].SeedTime;
+                    }
+                } catch (Exception e)
                 {
-                    Log("New Day, NightmareDayCounter reset, there was " + NightmareDayCounter + " total spawned nightmares yesterday.");
-                    NightmareDayCounter = 0;
+                    API.Log("Exception during CheckStatus: " + e.Message);
                 }
-                LastHourCheck = CurrentHour();
-                HasANightmareHappenedThisHour = false;
             }
         }
 
-        public static void TrySpawningNightmare()
+        public static void SeedNightmares()
         {
-
-            //See if there's already a prominent number of nightmares.
-            int playerCount = ConnectionManager.Instance.GetClients().Count;
-
-            int maxNightmares = playerCount + (CurrentDay() / 2);
-            if (maxNightmares < playerCount) maxNightmares = playerCount;
-
-            //We've met daily quota
-            if (maxNightmares <= NightmareDayCounter)
+            try
             {
-                Log("Daily quota met: " + maxNightmares);
-                return;
-            }
+                NightmareSeeds.Clear();
+                ulong currentTime = GameManager.Instance.World.GetWorldTime();
 
-            Random rnd = new Random();
-            int roll = rnd.Next(0, 31);
-            Log("Rolled dice: "+roll);
-            if (roll < 2) {
-                SpawnNightmare();
+                API.Log("Seeding nightmares with current time: " + currentTime);
+
+                Random rnd = new Random();
+
+
+                int maxNumberofNightmares = GameManager.Instance.World.Players.Count + GameUtils.WorldTimeToDays(GameManager.Instance.World.GetWorldTime());
+                int numberOfNightmares = rnd.Next(1, maxNumberofNightmares);
+
+                API.Log("Preparing " + numberOfNightmares + " total nightmares for the next 24 hours");
+                
+                ulong lastTime = currentTime;
+                int timeGap = 24000 / numberOfNightmares;
+                API.Log("Timegap: " + timeGap);
+                if (timeGap < 2) timeGap = 200;
+
+                for (int i = 0; i < numberOfNightmares; i++)
+                {
+                    NightmareType nt = GetRandomNightmareType();
+                    //1440 minutes in a day.
+                    NightmareSeed ns = new NightmareSeed(nt, lastTime + (ulong)rnd.Next(1, timeGap));
+                    lastTime = ns.SeedTime;
+                    API.Log(NightmareSeeds.Count + " is a " + ns.NightmareType.ClassName + " and will spawn at " + ns.SeedTime);
+                    if (i == 0) NextNightmare = ns.SeedTime;
+                    NightmareSeeds.Add(ns);
+                }
+
+                NextNightmareReseed = currentTime + 24000;
+            } catch (Exception e)
+            {
+                API.Log("Exception while seeding nightmares: " + e.Message);
             }
         }
+
+        public static NightmareType GetRandomNightmareType()
+        {
+            try
+            {
+                Random rnd = new Random();
+                int poolSize = 0;
+
+                Dictionary<int, NightmareType> rngPool = new Dictionary<int, NightmareType>();
+
+                if (NightmareTypes.Count() == 0)
+                {
+                    API.Log("No nightmare entries found");
+                    return null;
+                }
+
+                foreach (NightmareType nt in NightmareTypes)
+                {
+                    if (nt.MinimumDay > CurrentDay()) continue;
+                    int poolWeight = nt.Weight;
+                    if (nt.MinimumDay < CurrentDay())
+                    {
+                        int negativeWeight = CurrentDay() - nt.MinimumDay * 5;
+                        poolWeight -= negativeWeight;
+                    }
+
+                    if (poolWeight < 1) poolWeight = 1;
+                    poolSize += poolWeight;
+                    rngPool.Add(poolSize, nt);
+                }
+
+                if (rngPool.Count() == 0)
+                {
+                    API.Log("No rngPool found");
+                    return NightmareTypes[0];
+                }
+
+
+                int result = rnd.Next(0, poolSize);
+
+                bool isFound = false;
+
+                foreach (KeyValuePair<int, NightmareType> entry in rngPool)
+                {
+                    if (entry.Key <= result) continue;
+
+                    API.Log("Rolled " + result + " of " + poolSize + ", which is a " + entry.Value.ClassName);
+                    return entry.Value;
+                }
+
+                if (!isFound)
+                {
+                    API.Log("Did not find RNG entry, falling back to first entry");
+                    return NightmareTypes[0];
+                }
+            } catch (Exception e)
+            {
+                API.Log("Exception while picking random nightmare: " + e.Message);
+            }
+
+            return NightmareTypes[0];
+        }
+        
 
         //Spawns a nightmare
-        public static void SpawnNightmare()
+        public static void SpawnNightmare(NightmareSeed ns)
         {
-            Random rnd = new Random();
-            int poolSize = 0;
-
-            Dictionary<int, NightmareType> rngPool = new Dictionary<int, NightmareType>();
-
-            Log("Spawning Nightmare...");
-            if (NightmareTypes.Count() == 0)
-            {
-                Log("No nightmare entries found");
-                return;
-            }
-
-
-            foreach (NightmareType nt in NightmareTypes)
-            {
-                if (nt.MinimumDay > CurrentDay()) continue;
-                int poolWeight = nt.Weight;
-                if (nt.MinimumDay < CurrentDay())
-                {
-                    int negativeWeight = CurrentDay() - nt.MinimumDay * 5;
-                    poolWeight -= negativeWeight;
-                }
-
-                if (poolWeight < 1) poolWeight = 1;
-                poolSize += poolWeight;
-                rngPool.Add(poolSize, nt);
-            }
-
-            if (rngPool.Count() == 0)
-            {
-                Log("No rngPool found");
-                return;
-            }
-
-
-            int result = rnd.Next(0, poolSize);
-            Log("Rolled "+result+" of "+poolSize);
-
-            bool isFound = false;
 
             NightmareInstance ni = new NightmareInstance();
-            foreach (KeyValuePair<int, NightmareType> entry in rngPool)
-            {
-                Log(entry.Key + ", " + result);
-                if (entry.Key < result) continue;                
-                ni.InstanceType = entry.Value;
-                isFound = true;
-            }
 
-            if (!isFound)
-            {
-                Log("Did not find RNG entry, falling back to 0");
-                ni.InstanceType = NightmareTypes[0];
-            }
-            Log("Spawning instance "+ ni.InstanceType.ClassName);
+            ni.InstanceType = ns.NightmareType;
 
-            
-            using (Dictionary<int, EntityClass>.KeyCollection.Enumerator enumerator3 = EntityClass.list.Keys.GetEnumerator())
+            try
             {
-                while (enumerator3.MoveNext())
+                API.Log("Spawning instance " + ni.InstanceType.ClassName);
+
+
+                using (Dictionary<int, EntityClass>.KeyCollection.Enumerator enumerator3 = EntityClass.list.Keys.GetEnumerator())
                 {
-                    //Find entity class
-                    int current3 = enumerator3.Current;
-                    if (!EntityClass.list[current3].entityClassName.Equals(ni.InstanceType.ClassName)) continue;
-                    //Log("Found entity " + current3 + " to be classname " + CurrentNightmare.ClassName);
-                    //Find a place to spawn it
-                    int x, y, z;
-                    
-                    if (!GameManager.Instance.World.FindRandomSpawnPointNearPlayer(ni.TargetEntity, 15, out x, out y, out z, 50)) continue;                    
-                    //spawn it
-                    UnityEngine.Vector3 pos = new UnityEngine.Vector3(x,y,z);
 
-                    ni.Instance = (EntityEnemy)EntityFactory.CreateEntity(current3, pos);
+                    while (enumerator3.MoveNext())
+                    {
 
-                    //EntityClass.list.Add()
-                    //CurrentNightmare.TargetEntity.PlayOneShot()
-                    //CurrentNightmare.NightmareEntity.SetVelocity();
-                    ni.Instance.SetEntityName("A nightmare");
-                    ni.Instance.MovementRunning = true;
-                    ni.Instance.isFeral = true;
-                    GameManager.Instance.World.SpawnEntityInWorld(ni.Instance);
-                    
-                    BroadcastMessage(ni.InstanceType.Message);
-                    //EntityClass.list[current3].ExperienceValue
-                    NightmareInstances.Add(ni);
-                    ni.PickRandomTarget();
-                    Log("Added instance " + ni.InstanceType.ClassName+ " at "+ x + ", " + y + ", " + z);
-                    return;
+                        //Find entity class
+                        int current3 = enumerator3.Current;
+                        //API.Log("Iterating enum, on " + current3+ " ("+EntityClass.list[current3].entityClassName+")");
+                        if (!EntityClass.list[current3].entityClassName.Equals(ni.InstanceType.ClassName)) continue;
+                        //API.Log("Found entity " + current3 + " to be classname " + ni.InstanceType.ClassName);
+                        //Find a place to spawn it
+                        int x = 0, y = 0, z = 0;
+
+                        API.Log("Finding target");
+
+                        ni.PickRandomTarget();
+                        if (ni.TargetEntity == null)
+                        {
+                            API.Log("Failed to find a target entity");
+                            return;
+                        }
+                        API.Log("Finding location to spawn");
+
+                        bool isSpawnLocFound = false;
+                        for (int i = 0; i < 10; i++)
+                        {
+                            if (GameManager.Instance.World.FindRandomSpawnPointNearPlayer(ni.TargetEntity, 30, out x, out y, out z, 500))
+                            {
+                                isSpawnLocFound = true;
+                                break;
+                            }
+                        }
+
+                        if (!isSpawnLocFound)
+                        {
+                            API.Log("Failed to find spawn location near player" + ni.TargetEntity);
+                            return;
+                        }
+
+                        UnityEngine.Vector3 pos = new UnityEngine.Vector3(x, y, z);
+
+                        API.Log("Creating entity.." + current3);
+                        ni.Instance = (EntityEnemy)EntityFactory.CreateEntity(current3, pos);
+
+                        //EntityClass.list.Add()
+                        //CurrentNightmare.TargetEntity.PlayOneShot()
+                        //CurrentNightmare.NightmareEntity.SetVelocity();
+                        API.Log("Setting entity name");
+                        ni.Instance.SetEntityName("A nightmare");
+                        //ni.Instance.MovementRunning = true;
+
+                        GameManager.Instance.World.SpawnEntityInWorld(ni.Instance);
+                        API.Log("Broadcasting spawn alert");
+                        BroadcastMessage(ni.InstanceType.Message);
+                        //EntityClass.list[current3].ExperienceValue
+                        NightmareInstances.Add(ni);
+                        API.Log("Added instance " + ni.InstanceType.ClassName + " at " + x + ", " + y + ", " + z);
+
+                        ni.Instance.SetAttackTarget(ni.TargetEntity, 2400);
+                        return;
+                    }
                 }
+                API.Log("Failed to find class type of nightmare: " + ni.InstanceType.ClassName);
+            } 
+            catch (Exception e)
+            {
+                API.Log("Failed to spawn nightmare: " + e.Message);
+                return;
             }
-            Log("Failed to find class type of nightmare: " + ni.InstanceType.ClassName);
         }
-
-        public static void Log(string message)
-        {            
-            UnityEngine.Debug.Log("NightmareMod: "+message);
-            //BroadcastMessage(message);
-        }
+        
 
         public static void BroadcastMessage(string message, string color = "[FF0000]")
         {
@@ -384,6 +451,7 @@ namespace CoreApi
 
         public static int CurrentHour()
         {
+                       
             return GameUtils.WorldTimeToHours(GameManager.Instance.World.GetWorldTime());
         }
 
