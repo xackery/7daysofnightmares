@@ -52,7 +52,7 @@ namespace CoreApi
             API.Log("Picking target...");
             Random rnd = new Random();
             List<EntityPlayer> players = GameManager.Instance.World.GetPlayers();
-            int roll = rnd.Next(0, players.Count);
+            int roll = rnd.Next(0, players.Count-1);
             API.Log("Rolled: " + roll + " Size of players: " + players.Count);
             TargetEntity = (EntityAlive)players[roll];
             
