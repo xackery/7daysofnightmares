@@ -29,14 +29,14 @@ namespace CoreApi
         }
 
         //Chat hook system
-        /*public override bool ChatMessage(ClientInfo _cInfo, EnumGameMessages _type, string _message, string _playerName, bool _localizeMain, string _secondaryName, bool _localizeSecondary)
+        public override bool ChatMessage(ClientInfo _cInfo, EnumGameMessages _type, string _message, string _playerName, bool _localizeMain, string _secondaryName, bool _localizeSecondary)
         {
             if (_message.ToLower().Equals("nightmare")) {
-                Nightmare.TrySpawningNightmare();
+                Nightmare.SpawnNightmareOnPlayer(_cInfo);
                 return false;
             }
             return true;
-        }*/
+        }
 
         //When a player disconnects
         public override void PlayerDisconnected(ClientInfo _cInfo, bool _bShutdown)

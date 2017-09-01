@@ -49,22 +49,57 @@ namespace CoreApi
                 
         public void PickRandomTarget()
         {
-            API.Log("Picking target...");
+            List<EntityPlayer> players = new List<EntityPlayer>();
+
+            foreach (var player in GameManager.Instance.World.GetPlayers())
+            {
+                if (player.IsSpawned() && !player.IsDead()) players.Add(player);
+            }
+
+            if (players.Count < 1)
+            {
+                API.Log("No alive/spawned players found to target, returning");
+                return;
+            }
+
+            if (Instance != null) //entity is already spawned, find closest target
+            {
+                API.Log("Picking new target...");                
+                float distance = 99999999;
+                float newDistance;
+                EntityPlayer closestPlayer = null;
+                foreach (var player in players)
+                {
+                    newDistance = player.GetDistance(Instance);
+                    if (newDistance > 500) continue; //don't bother chasing players really far away.
+                    if (newDistance < distance)
+                    {
+                        distance = newDistance;
+                        closestPlayer = player;
+                    }
+                }
+                if (closestPlayer != null)
+                {
+                    API.Log("Closest player "+ TargetEntity.belongsPlayerId + " is " + distance + " away");
+                    TargetEntity = (EntityAlive)closestPlayer;
+                    return;
+                }
+            }
+            
+
+            API.Log("Picking random target...");
             Random rnd = new Random();
-            List<EntityPlayer> players = GameManager.Instance.World.GetPlayers();
+            
             int roll = rnd.Next(0, players.Count-1);
             API.Log("Rolled: " + roll + " Size of players: " + players.Count);
             TargetEntity = (EntityAlive)players[roll];
             
             API.Log("Targetting " + TargetEntity.belongsPlayerId);
-
-            //Instance.SetInvestigatePosition(TargetEntity.position, 2400);
         }
     }
 
     class Nightmare
     {
-        //_cInfo.SendPackage(new NetPackageGameMessage(EnumGameMessages.Chat, string.Format("{0}{1}[-]", API.ChatColor, _phrase200), "Server", false, "", false));
         public static bool IsRunning = false;
         private static Thread th;
 
@@ -149,7 +184,7 @@ namespace CoreApi
 
             API.Log("*** Initialized Nightmare Mod, Added " + NightmareTypes.Count + " nightmare types ***");
 
-            th = new Thread(new ThreadStart(StatusCheck));
+            th = new Thread(new ThreadStart(MainLoop));
             th.IsBackground = true;
             th.Start();
         }
@@ -160,38 +195,63 @@ namespace CoreApi
             IsRunning = false;
         }   
 
-        private static void StatusCheck()
+        private static void MainLoop()
         {
+
+            //Lasttime only triggers when server is offline, and saves effort.
+            ulong lastTime = 0;
+            ulong currentTime = 0;
             while (true)
             {
                 try
                 {
                     Thread.Sleep(6000);
-                    if (NextNightmareReseed <= GameManager.Instance.World.GetWorldTime()) SeedNightmares();
-                    API.Log("Time: " + GameManager.Instance.World.GetWorldTime()+", nextSeed: "+NextNightmareReseed+", nextEvent: "+NextNightmare);
-                    
+                    currentTime = GameManager.Instance.World.GetWorldTime();
+                    if (NextNightmareReseed <= currentTime) SeedNightmares();                    
+                    if (currentTime == lastTime) continue;
+                    lastTime = currentTime;
+                    string strNextNightmare = "";
+                    if (NextNightmare < currentTime) strNextNightmare = "None";
+                    if (NextNightmare >= currentTime) strNextNightmare = string.Format("{1} ({2:0}s)", NextNightmare, ((NextNightmare - currentTime) / 5.8f));
+                    API.Log(string.Format("Time: {0}, NextNightmare: {1} ({2:0}s), NextReseed: {3} ({4:0}s [{5} Nightmares Currently Spawned])", currentTime, strNextNightmare, NextNightmareReseed, ((NextNightmareReseed - currentTime) / 5.8f), NightmareInstances.Count));
 
                     if (ConnectionManager.Instance.ClientCount() < 1 || GameManager.Instance.World.GetPlayers().Count < 1) continue;
 
                     //AI LOGIC/CLEANUP
-                    for (int i = NightmareInstances.Count - 1; i > 0; i--)
+                    for (int i = NightmareInstances.Count - 1; i > -1; i--)
                     {
-                        int index = i - 1;
+                        int index = i;
                         NightmareInstance ni = NightmareInstances[index];
 
                         //Remove dead/null instances
                         if (ni == null || ni.Instance == null || ni.Instance.IsDead())
                         {
                             NightmareInstances.RemoveAt(index);
-                            API.Log("Removed nightmare instance " + index + ", " + NightmareInstances.Count + " left");
+                            API.Log(string.Format("Removed nightmare instance {0}, {1} nightmares remain",  index , NightmareInstances.Count));
+                            continue;
+                        }
+                        //Ensure entity is behaving like a nightmare
+                        if (ni.Instance.GetAttackTarget() == null && ni.TargetEntity != null && !ni.TargetEntity.IsDead() && ni.TargetEntity.IsSpawned())
+                        {
+                            API.Log(string.Format("{0} {1} was evaded by target player {2}, re-engaging (it's a nightmare afterall)...", ni.InstanceType.ClassName, index, ni.TargetEntity.belongsPlayerId));
+                            ni.Instance.SetAttackTarget(ni.TargetEntity, 1200);
                             continue;
                         }
 
-                        //Ensure we got a target.
-                        if (ni.TargetEntity == null || ni.TargetEntity.IsDead())
+
+                        //Ensure target is still legit
+                        if (ni.TargetEntity == null || (ni.TargetEntity.IsDead() && ni.TargetEntity.IsSpawned()))
                         {
-                            API.Log(index + " is picking a new random player target");
+                            API.Log(string.Format("{0} {1} thinks target is dead/disconnected, picking new target...", ni.InstanceType.ClassName, index));
                             ni.PickRandomTarget();
+                            if (ni.TargetEntity == null)
+                            {
+                                NightmareInstances.RemoveAt(index);
+                                API.Log("Removed nightmare instance " + index + " due to no target found, " + NightmareInstances.Count + " left");
+                                continue;
+                            }
+                            //engage target
+                            ni.Instance.SetAttackTarget(ni.TargetEntity, 1200);
                         }
                     }
 
@@ -201,11 +261,11 @@ namespace CoreApi
                         
                         NightmareSeeds.RemoveAt(0);
                         NextNightmare = 0;
-                        if (NightmareSeeds.Count > 0) NextNightmare = NightmareSeeds[0].SeedTime;                        
+                        if (NightmareSeeds.Count > 0) NextNightmare = NightmareSeeds[0].SeedTime;
                     }
                 } catch (Exception e)
                 {
-                    API.Log("Exception during CheckStatus: " + e.Message);
+                    API.Log("Exception during MainLoop: " + e.Message);
                 }
             }
         }
@@ -234,8 +294,8 @@ namespace CoreApi
                 API.Log("Preparing " + numberOfNightmares + " total nightmares for the next 24 hours");
                 
                 ulong lastTime = currentTime;
-                int timeGap = 24000 / numberOfNightmares;
-                API.Log("Timegap: " + timeGap);
+                int timeGap = 6000 / numberOfNightmares;
+                API.Log("Timegap: " + timeGap + " (" + (timeGap / 5.8f) + "s)");
                 if (timeGap < 2) timeGap = 200;
 
                 for (int i = 0; i < numberOfNightmares; i++)
@@ -260,7 +320,7 @@ namespace CoreApi
                     NightmareSeeds.Add(ns);
                 }
 
-                NextNightmareReseed = currentTime + 24000;
+                NextNightmareReseed = currentTime + 6000;
             } catch (Exception e)
             {
                 API.Log("Exception while seeding nightmares: " + e.Message);
@@ -329,9 +389,32 @@ namespace CoreApi
             return NightmareTypes[0];
         }
         
+        //Chat-triggered override spawner
+        public static void SpawnNightmareOnPlayer(ClientInfo _cInfo)
+        {
+            if (NightmareSeeds.Count < 1)
+            {
+                WhisperMessage(_cInfo, "No nightmares are ready to spawn...");
+                return;
+            }
+            try
+            {
+                var ns = NightmareSeeds[0];
+                foreach (NightmareType nt in ns.NightmareTypes)
+                {
+                    SpawnNightmare(nt);
+                }
+                NightmareSeeds.RemoveAt(0);
+                NextNightmare = 0;
+                if (NightmareSeeds.Count > 0) NextNightmare = NightmareSeeds[0].SeedTime;
+            } catch (Exception e)
+            {
+                API.Log("Failed to SpawnNightmareOnPlayer:" + e.Message);
+            }
+        }
 
         //Spawns a nightmare
-        public static void SpawnNightmare(NightmareType nt)
+        public static void SpawnNightmare(NightmareType nt, EntityAlive target = null)
         {
 
             NightmareInstance ni = new NightmareInstance();
@@ -357,20 +440,28 @@ namespace CoreApi
                         //Find a place to spawn it
                         int x = 0, y = 0, z = 0;
 
-                        API.Log("Finding target");
 
-                        ni.PickRandomTarget();
+                        if (target == null)
+                        {
+                            API.Log("Finding target");
+                            ni.PickRandomTarget();
+                        } else
+                        {
+                            ni.TargetEntity = target;
+                        }
+
                         if (ni.TargetEntity == null)
                         {
                             API.Log("Failed to find a target entity");
                             return;
                         }
-                        API.Log("Finding location to spawn");
+                        API.Log("Finding location to spawn");                        
+
 
                         bool isSpawnLocFound = false;
                         for (int i = 0; i < 10; i++)
                         {
-                            if (GameManager.Instance.World.FindRandomSpawnPointNearPlayer(ni.TargetEntity, 30, out x, out y, out z, 500))
+                            if (GameManager.Instance.World.FindRandomSpawnPointNearPlayer(ni.TargetEntity, 30, out x, out y, out z, 200))
                             {
                                 isSpawnLocFound = true;
                                 break;
@@ -386,24 +477,28 @@ namespace CoreApi
                         UnityEngine.Vector3 pos = new UnityEngine.Vector3(x, y, z);
 
                         API.Log("Creating entity.." + current3);
+                        //This is found in AIDirectoryBloodMoonParty
                         ni.Instance = (EntityEnemy)EntityFactory.CreateEntity(current3, pos);
-
-                        //EntityClass.list.Add()
-                        //CurrentNightmare.TargetEntity.PlayOneShot()
-                        //CurrentNightmare.NightmareEntity.SetVelocity();
-                        API.Log("Setting entity name");
-                        ni.Instance.SetEntityName("A nightmare");
-                        //ni.Instance.MovementRunning = true;
+                        ni.Instance.isFeral = true;
                         
-                        //ni.Instance.lootContainer.AddItem()
+                        //ni.Instance.lootContainer.AddItem(new ItemStack(new ItemValue(114), 1));
+                        //string loot = "Loot: ";
+                        //foreach (var item in ni.Instance.equipment.GetItems())
+                        //{
+                         //   loot += string.Format("{0} [{1}] x{2}", item.ItemClass, item.Quality);
+                        //}
+                        //API.Log(string.Format("Loot: {0}", loot));
+
                         GameManager.Instance.World.SpawnEntityInWorld(ni.Instance);
-                        API.Log("Broadcasting spawn alert");
-                        BroadcastMessage(ni.InstanceType.Message);
-                        //EntityClass.list[current3].ExperienceValue
+
+
+                        //ni.Instance.SetEntityName("A nightmare");
+                        //ni.Instance.SetSpawnerSource(EnumSpawnerSource.Dynamic);
                         NightmareInstances.Add(ni);
+                        ni.Instance.SetAttackTarget(ni.TargetEntity, 1200);
                         API.Log("Added instance " + ni.InstanceType.ClassName + " at " + x + ", " + y + ", " + z);
 
-                        ni.Instance.SetAttackTarget(ni.TargetEntity, 2400);
+                        WhisperMessage(ConnectionManager.Instance.GetClientInfoForPlayerId(ni.TargetEntity.belongsPlayerId.ToString()), ni.InstanceType.Message);                        
                         return;
                     }
                 }
@@ -425,19 +520,24 @@ namespace CoreApi
 
         public static void WhisperMessage(ClientInfo _cInfo, string message, string color = "[FF0000]")
         {
-            if (_cInfo == null) return;
-            if (color == "") color = "[FF0000]";
+            try
+            {
+                if (_cInfo == null)
+                {
+                    API.Log("Failed to send whisper message: _cInfo is null (message: " + message);
+                    return;
+                }
+                if (color == "") color = "[FF0000]";
 
-            string Nickname = "";
-            _cInfo.SendPackage(new NetPackageGameMessage(EnumGameMessages.Chat, string.Format("{0}{1}[-]", color, message), Nickname, false, "", false));
+                string Nickname = "";
+                _cInfo.SendPackage(new NetPackageGameMessage(EnumGameMessages.Chat, string.Format("{0}{1}[-]", color, message), Nickname, false, "", false));
+            }
+            catch (Exception e)
+            {
+                API.Log("Failed to WhisperMessage: " + e.Message);
+            }
         }
-
-        public static int CurrentHour()
-        {
-                       
-            return GameUtils.WorldTimeToHours(GameManager.Instance.World.GetWorldTime());
-        }
-
+        
         private static int CurrentDay()
         {            
             return GameUtils.WorldTimeToDays(GameManager.Instance.World.GetWorldTime());
